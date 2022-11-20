@@ -6,7 +6,7 @@ module.exports = {
         .setName('python')
         .setDescription('Тест на пітонщіка'),
     customId: 'testModal',
-    async execute(interaction) {
+    async execute({ interaction }) {
         const modal = new ModalBuilder()
             .setCustomId(this.customId)
             .setTitle('Тест на пітонщіка');

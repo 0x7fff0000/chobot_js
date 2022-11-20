@@ -1,9 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
-const { token } = require('./config.json');
+//const { token } = require('./config.json');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+
+client.guildsCache = {};
 
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
@@ -40,7 +42,7 @@ client.on(Events.InteractionCreate, async interaction => {
             return;
         }
 
-        await command.execute(interaction);
+        await command.execute({ interaction, guildsCache: client.guildsCache });
     } catch (error) {
         console.error(error);
 
@@ -48,4 +50,4 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
-client.login(token);
+client.login(process.env.TOKEN);
