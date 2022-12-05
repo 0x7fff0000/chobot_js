@@ -1,11 +1,14 @@
+require('dotenv').config();
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
-//const { token } = require('./config.json');
+
+const config = require('./config');
+
+global.sequelize = require('./database');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
-
-client.guildsCache = {};
 
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
@@ -17,10 +20,6 @@ for (const file of commandFiles) {
 
     client.commands.set(command.data.name, command);
 }
-
-client.once(Events.ClientReady, () => {
-    console.log(`Logged in as ${client.user.tag}`);
-});
 
 client.on(Events.InteractionCreate, async interaction => {
     const bModalSubmit = interaction.isModalSubmit();
@@ -42,7 +41,7 @@ client.on(Events.InteractionCreate, async interaction => {
             return;
         }
 
-        await command.execute({ interaction, guildsCache: client.guildsCache });
+        await command.execute({ interaction });
     } catch (error) {
         console.error(error);
 
@@ -50,4 +49,24 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
-client.login(process.env.TOKEN);
+
+client.once(Events.ClientReady, () => {
+    global.sequelize.authenticate().then(() => {
+        console.log('Connected to DB');
+
+        const commandsPath = path.join(__dirname, 'models');
+        const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+        for (const file of commandFiles) {
+            const filePath = path.join(commandsPath, file);
+            
+            require(filePath);
+        }
+
+        global.sequelize.sync({ force: config.database.force_sync }).then(() => console.log('DB synchronized'))
+    });
+
+    console.log(`Logged in as ${client.user.tag}`);
+});
+
+client.login(config.bot.token);

@@ -1,22 +1,17 @@
 const { SlashCommandBuilder } = require("@discordjs/builders");
-const { getVoiceConnection } = require("@discordjs/voice");
-const playCommand = require('./play');
+const Setting = require("../models/setting");
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('loop')
         .setDescription('Повторювать бас'),
-    async execute({ interaction, guildsCache }) {
-        return interaction.reply('Робиться');
+    async execute({ interaction }) {
+        const loopSetting = await Setting.get(interaction.guildId, 'loop_song', '', true);
 
-        const guildCache = guildsCache[interaction.guild.id];
+        await loopSetting.update({
+            value: loopSetting.value ? '' : 'true'
+        });
 
-        if (!guildCache) {
-            guildsCache[interaction.guild.id] = {};
-        }
-
-        guildsCache[interaction.guild.id].loop = !(guildsCache[interaction.guild.id]?.loop ?? false);
-        
-        return interaction.reply(`${guildsCache[interaction.guild.id].loop ? 'На повторе' : 'Одноразка'}`);
+        return interaction.reply(`${loopSetting.value ? 'На' : 'Не на'} повторі`);
     }
 };

@@ -1,6 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("@discordjs/builders");
+const { SlashCommandBuilder } = require("@discordjs/builders");
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require("@discordjs/voice");
 const ytdl = require('ytdl-core');
+const { getVideoEmbed } = require("../embeds/youtube");
+const Setting = require("../models/setting");
+const Song = require("../models/song");
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,7 +14,7 @@ module.exports = {
                 .setDescription('Силка з ютуба')
                 .setRequired(true)
         ),
-    async execute({ interaction, guildsCache }) {
+    async execute({ interaction }) {
         const channelId = interaction.member.voice.channel?.id ?? null;
 
         if (!channelId) {
@@ -20,29 +23,19 @@ module.exports = {
 
         const urlOption = interaction.options.get('url');
 
-        try {
-            var { videoDetails } = await ytdl.getBasicInfo(urlOption.value);
-        } catch (e) {
+        const embed = await getVideoEmbed({ url: urlOption.value, member: interaction.member, date: new Date() });
+
+        if (!embed) {
             return interaction.reply('Нема такого');
         }
 
-        const embed = new EmbedBuilder()
-            .setTitle(videoDetails.title)
-            .setURL(videoDetails.video_url)
-            .setThumbnail(videoDetails.thumbnails.at(-1).url ?? '')
-            .setAuthor({
-                name: videoDetails.author.name,
-                url: videoDetails.author.channel_url,
-                iconURL: videoDetails.author.thumbnails.at(-1).url
-            })
-            .setDescription(videoDetails.description)
-            .setFooter({
-                iconURL: interaction.member.avatarURL(),
-                text: interaction.member.displayName
-            })
-            .setTimestamp(Date.now());
+        Song.create({
+            memberId: interaction.memberId,
+            guildId: interaction.guildId,
+            url: urlOption.value
+        });
 
-        const stream = ytdl(videoDetails.video_url, { quality: 'highestaudio', filter: 'audioonly' });
+        const stream = ytdl(urlOption.value, { quality: 'highestaudio', filter: 'audioonly' });
 
         const connection = joinVoiceChannel({
             channelId,
@@ -56,12 +49,41 @@ module.exports = {
         connection.subscribe(player);
         player.play(resource);
 
-        player.on(AudioPlayerStatus.Idle, () => {
-            // if (!(guildsCache[interaction.guild.id]?.loop ?? false)) {
-                connection.destroy();
-            // }
+        player.on(AudioPlayerStatus.Idle, async () => {
+            const guildId = interaction.guildId;
+            const loopSetting = await Setting.get(guildId, 'loop_song', '');
+            const bLoop = loopSetting.value === 'true';
 
-            // player.play(ytdl(videoDetails.video_url, { quality: 'highestaudio', filter: 'audioonly' }));
+            const songs = await Song.findAll({
+                where: {
+                    guildId,
+                    played: false
+                },
+                limit: 2
+            });
+
+            let nextSong = null;
+
+            if (bLoop) {
+                nextSong = songs[0];
+            } else {
+                await songs[0].update({
+                    played: true
+                });
+
+                if (songs.length < 2) {
+                    connection.destroy();
+
+                    return;
+                }
+
+                nextSong = songs[1];
+            }
+
+            const stream = ytdl(nextSong.url, { quality: 'highestaudio', filter: 'audioonly' });
+            const resource = createAudioResource(stream);
+
+            player.play(resource);
         });
 
         return interaction.reply({ embeds: [embed] });

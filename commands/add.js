@@ -1,50 +1,36 @@
 const { SlashCommandBuilder } = require("@discordjs/builders");
 const { getVoiceConnection } = require("@discordjs/voice");
-const ytdl = require("ytdl-core");
+const { getVideoEmbed } = require("../embeds/youtube");
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('add')
-        .setDescription('Добавить баса'),
-    async execute({ interaction, guildsCache }) {
-        return interaction.reply('Робиться');
-
+        .setDescription('Добавить баса')
+        .addStringOption(option =>
+            option.setName('url')
+                .setDescription('Силка з ютуба')
+                .setRequired(true)
+        ),
+    async execute({ interaction }) {
         const connection = getVoiceConnection(interaction.guild.id);
 
         if (!connection) {
             return interaction.reply('Я і так зачілений');
         }
 
-        try {
-            var { videoDetails } = await ytdl.getBasicInfo(urlOption.value);
-        } catch (e) {
+        const urlOption = interaction.options.get('url');
+
+        const embed = getVideoEmbed(urlOption.value);
+
+        if (!embed) {
             return interaction.reply('Нема такого');
         }
 
-        const embed = new EmbedBuilder()
-            .setTitle(videoDetails.title)
-            .setURL(videoDetails.video_url)
-            .setThumbnail(videoDetails.thumbnails.at(-1).url ?? '')
-            .setAuthor({
-                name: videoDetails.author.name,
-                url: videoDetails.author.channel_url,
-                iconURL: videoDetails.author.thumbnails.at(-1).url
-            })
-            .setDescription(videoDetails.description)
-            .setFooter({
-                iconURL: interaction.user.avatarURL(),
-                text: interaction.member.displayName
-            })
-            .setTimestamp(Date.now());
-
-        const songs = guildsCache[interaction.guild.id]?.songs ?? [];
-        songs.push({
-            url: videoDetails.video_url,
-            member: interaction.member,
-            date: Date.now()
+        Song.create({
+            memberId: interaction.memberId,
+            guildId: interaction.guildId,
+            url: urlOption.value
         });
-
-        guildsCache[interaction.guild.id].songs = songs;
 
         return interaction.reply({ embeds: [embed] });
     }
